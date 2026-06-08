@@ -19,19 +19,19 @@ import { Roles } from '../auth/decorators/roles.decorator';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  // 💳 USER: SIMULATE GCASH PAYMENT
+  //  USER: SIMULATE GCASH PAYMENT
   @Post(':id/pay')
   pay(@Param('id') id: string) {
     return this.paymentsService.payNow(id);
   }
 
-  // 📦 USER: GET PAYMENT DETAILS
+  //  USER: GET PAYMENT DETAILS
   @Get(':id')
   getPayment(@Param('id') id: string) {
     return this.paymentsService.findPayment(id);
   }
 
-  // 🚚 ADMIN: CONFIRM COD PAYMENT
+  //  ADMIN: CONFIRM COD PAYMENT
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   @Post(':id/confirm-cod')
@@ -39,7 +39,7 @@ export class PaymentsController {
     return this.paymentsService.confirmCOD(id);
   }
 
-  // 🔔 WEBHOOK: AUTO PAYMENT CONFIRMATION (GCASH / EXTERNAL APPS)
+  //  WEBHOOK: AUTO PAYMENT CONFIRMATION (GCASH / EXTERNAL APPS)
   @Post('webhook')
   handleWebhook(
     @Body() payload: any,

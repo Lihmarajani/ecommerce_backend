@@ -17,6 +17,12 @@ import { Roles } from '../auth/decorators/roles.decorator';
 
 import { OrderStatus, PaymentMethod } from '@prisma/client';
 
+// Define a quick inline interface for incoming Buy Now items
+interface CheckoutItemDto {
+  productId: string;
+  quantity: number;
+}
+
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrdersController {
@@ -27,17 +33,22 @@ export class OrdersController {
   checkout(
     @Req() req,
     @Body('paymentMethod') paymentMethod: PaymentMethod,
+    @Body('totalAmount') totalAmount?: number, // Made optional for backward compatibility
+    @Body('items') items?: CheckoutItemDto[],  // Passed from Flutter for 'Buy Now'
   ) {
+    // Pass the user ID, payment details, and raw items down to the service layer
     return this.ordersService.checkout(
-      req.user.userId,
+      req.user.id,
       paymentMethod,
+      totalAmount,
+      items,
     );
   }
 
   // GET MY ORDERS
   @Get('my-orders')
   myOrders(@Req() req) {
-    return this.ordersService.myOrders(req.user.userId);
+    return this.ordersService.myOrders(req.user.id);
   }
 
   // GET SINGLE ORDER
@@ -46,9 +57,9 @@ export class OrdersController {
     return this.ordersService.findOne(id);
   }
 
-  // ADMIN: UPDATE ORDER STATUS
+  // ADMIN / VENDOR: UPDATE ORDER STATUS
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'VENDOR')
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,
@@ -57,9 +68,9 @@ export class OrdersController {
     return this.ordersService.updateStatus(id, status);
   }
 
-  // ADMIN: GET ALL ORDERS
+  // ADMIN / VENDOR: GET ALL ORDERS
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'VENDOR')
   @Get('admin/all')
   getAllOrders() {
     return this.ordersService.getAllOrders();

@@ -7,7 +7,8 @@ export class AuthController {
 
   @Post('register')
   register(@Body() body: any) {
-    return this.auth.register(body.name, body.email, body.password);
+    // CRITICAL FIX: Added body.role as the 4th parameter
+    return this.auth.register(body.name, body.email, body.password, body.role);
   }
 
   @Post('login')

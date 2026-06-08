@@ -12,8 +12,9 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { CategoriesModule } from './categories/categories.module';
 import { PaymentsModule } from './payments/payments.module';
-import { AdminModule } from './admin/admin.module';
+import { VendorModule } from './vendor/vendor.module';
 import { IntegrationModule } from './integration/integration.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -45,14 +46,19 @@ import { IntegrationModule } from './integration/integration.module';
     PaymentsModule,
 
     // =========================
-    // 🛠 ADMIN PANEL (RBAC PROTECTED)
+    // VENDOR PANEL (RBAC PROTECTED)
     // =========================
-    AdminModule,
+    VendorModule,
 
     // =========================
-    // 🔌 EXTERNAL INTEGRATION API
+    // EXTERNAL INTEGRATION API
     // =========================
     IntegrationModule,
+
+    // =========================
+    // CHAT
+    // =========================
+    ChatModule,
   ],
 
   controllers: [AppController],

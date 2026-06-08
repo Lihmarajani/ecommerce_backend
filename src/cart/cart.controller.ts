@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 
 import { CartService } from './cart.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Adjust if your path is different
 
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
@@ -26,8 +26,9 @@ export class CartController {
   addToCart(@Req() req, @Body() dto: AddToCartDto) {
     console.log('REQ USER:', req.user);
 
+    // FIXED: Changed req.user.userId to req.user.id
     return this.cartService.addToCart(
-      req.user.userId,
+      req.user.id, 
       dto.productId,
       dto.quantity,
     );
@@ -36,7 +37,8 @@ export class CartController {
   // GET USER CART
   @Get()
   getCart(@Req() req) {
-    return this.cartService.getCart(req.user.userId);
+    // FIXED: Changed req.user.userId to req.user.id
+    return this.cartService.getCart(req.user.id);
   }
 
   // UPDATE CART ITEM QUANTITY

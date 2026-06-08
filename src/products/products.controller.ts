@@ -8,7 +8,11 @@ import {
   Delete,
   Query,
   UseGuards,
+  Request,
+  UseInterceptors, 
+  UploadedFile,    
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express'; 
 
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -22,53 +26,96 @@ import { Roles } from '../auth/decorators/roles.decorator';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  //PUBLIC - Get all products (with search + filters)
+  // PUBLIC - Get all products (with search + filters)
   @Get()
-findAll(
-  @Query('page') page = '1',
-  @Query('limit') limit = '10',
-  @Query('search') search?: string,
-  @Query('minPrice') minPrice?: string,
-  @Query('maxPrice') maxPrice?: string,
-  @Query('inStock') inStock?: string,
-) {
-  return this.productsService.findAll({
-    page: Number(page),
-    limit: Number(limit),
-    search,
-    minPrice,
-    maxPrice,
-    inStock,
-  });
-}
+  findAll(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('inStock') inStock?: string,
+  ) {
+    return this.productsService.findAll({
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      minPrice,
+      maxPrice,
+      inStock,
+    });
+  }
 
-  //PUBLIC - Get single product
+  // PUBLIC - Get single product
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
-  //ADMIN ONLY - Create product
+  // VENDOR ONLY - Create product
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('VENDOR')
   @Post()
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  @UseInterceptors(FileInterceptor('file')) 
+  async create( 
+    @Body() body: any, 
+    @UploadedFile() file: any, 
+    @Request() req: any
+  ) {
+    const vendorId = req.user.id; 
+
+    // 1. Send the file to Cloudinary and get the public URL back!
+    let uploadedImageUrl = '';
+    if (file) {
+      uploadedImageUrl = await this.productsService.uploadImage(file);
+    }
+
+    // 2. Package the text data AND the new image URL together
+    const dto = {
+      name: body.name,
+      description: body.description,
+      price: parseFloat(body.price),
+      stock: parseInt(body.stock, 10),
+      imageUrl: uploadedImageUrl, 
+    } as CreateProductDto;
+
+    // 3. Save everything to the database
+    return this.productsService.create(dto, vendorId);
   }
 
-  //ADMIN ONLY - Update product
+  // VENDOR ONLY - Update product
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('VENDOR')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }
 
-  //ADMIN ONLY - Delete product
+  // VENDOR ONLY - Delete product
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('VENDOR')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.productsService.remove(id);
+  }
+
+  // ==========================================
+  // ---> NEW: REVIEW ENDPOINT <---
+  // ==========================================
+  // REGISTERED USERS ONLY - Add a review
+  @UseGuards(JwtAuthGuard) 
+  @Post(':id/reviews')
+  async addReview(
+    @Param('id') productId: string,
+    @Body() body: { rating: number; comment: string },
+    @Request() req
+  ) {
+    // req.user.id comes automatically from the logged-in JWT token
+    return this.productsService.addReview(
+      productId,
+      req.user.id,
+      body.rating,
+      body.comment
+    );
   }
 }

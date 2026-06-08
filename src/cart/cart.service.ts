@@ -19,11 +19,12 @@ export class CartService {
       throw new NotFoundException('Product not found');
     }
 
-    // optional safety check (recommended)
+    // Optional safety check (recommended)
     if (product.stock < quantity) {
       throw new BadRequestException('Not enough stock available');
     }
 
+    // FIXED: userId is now correctly passed to the composite unique key
     const existingCartItem = await this.prisma.cartItem.findUnique({
       where: {
         userId_productId: {
@@ -93,7 +94,7 @@ export class CartService {
     });
   }
 
-  // CLEAR CART (OPTIONAL BUT USEFUL)
+  // CLEAR CART
   async clearCart(userId: string) {
     return this.prisma.cartItem.deleteMany({
       where: { userId },

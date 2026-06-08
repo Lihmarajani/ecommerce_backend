@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client'; // <--- 1. Import the Role enum from Prisma
 
 @Injectable()
 export class AuthService {
@@ -10,8 +11,8 @@ export class AuthService {
     private jwt: JwtService,
   ) {}
 
-  // REGISTER
-  async register(name: string, email: string, password: string) {
+  // --- FIXED REGISTER METHOD ---
+  async register(name: string, email: string, password: string, role?: string) {
     const existing = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -22,22 +23,36 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // 2. Cast the incoming string to the Prisma Role enum, falling back to Role.USER
+    const assignedRole = (role as Role) || Role.USER;
+
     const user = await this.prisma.user.create({
       data: {
         name,
         email,
         passwordHash: hashedPassword,
-        role: 'USER',
+        role: assignedRole, // <--- 3. Prisma is happy now!
       },
     });
 
+    const accessToken = this.jwt.sign({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
     return {
-      message: 'User created',
-      id: user.id,
+      access_token: accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     };
   }
 
-  // LOGIN
+  // --- LOGIN METHOD ---
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -66,6 +81,7 @@ export class AuthService {
       access_token: accessToken,
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
         role: user.role,
       },

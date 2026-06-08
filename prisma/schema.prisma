@@ -3,21 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum Role {
-  ADMIN
-  USER
-}
-
-enum OrderStatus {
-  PENDING
-  PAID
-  SHIPPED
-  DELIVERED
-  CANCELLED
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model User {
@@ -26,81 +14,158 @@ model User {
   email        String   @unique
   passwordHash String
   role         Role     @default(USER)
-
-  cartItems    CartItem[]
-  orders       Order[]
-
+  
+  // FIXED: Changed 'string' to 'String'
+  shopName     String?  
+  shopAddress  String?  
+  
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  
+  // Relations...
+  cartItems            CartItem[]
+  orders               Order[]    
+  products             Product[]  
+  reviews              Review[]   
+  
+  customerConversations Conversation[] @relation("CustomerConversations")
+  vendorConversations   Conversation[] @relation("VendorConversations")
+  messages              Message[]
 }
 
 model Product {
-  id          String   @id @default(uuid())
-  sku         String   @unique
-  name        String
-  description String
-  price       Float
-  stock       Int
-  imageUrl    String?
-
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id])
-
-  cartItems   CartItem[]
-  orderItems  OrderItem[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String      @id @default(uuid())
+  sku           String      @unique
+  name          String
+  description   String
+  price         Float
+  stock         Int
+  imageUrl      String?
+  categoryId    String?
+  vendorId      String      
+  averageRating Float       @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  category      Category?   @relation(fields: [categoryId], references: [id])
+  vendor        User        @relation(fields: [vendorId], references: [id])
+  reviews       Review[]
+  conversations Conversation[]
 }
 
 model CartItem {
   id        String   @id @default(uuid())
   quantity  Int
-
   userId    String
   productId String
-
-  user      User     @relation(fields: [userId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-
   createdAt DateTime @default(now())
+  
+  product   Product  @relation(fields: [productId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, productId])
 }
 
 model Order {
-  id        String       @id @default(uuid())
+  id        String      @id @default(uuid())
   userId    String
-  status    OrderStatus  @default(PENDING)
+  status    OrderStatus @default(PENDING)
   total     Float
-
-  user      User         @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now())
+  
+  user      User        @relation(fields: [userId], references: [id])
   items     OrderItem[]
   payment   Payment?
-
-  createdAt DateTime     @default(now())
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
-
+  id        String  @id @default(uuid())
   orderId   String
   productId String
-
   quantity  Int
   price     Float
-
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 model Category {
   id        String    @id @default(uuid())
   name      String    @unique
-  products  Product[]
-
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  
+  products  Product[]
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  orderId   String        @unique
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  amount    Float
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  
+  order     Order         @relation(fields: [orderId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int
+  comment   String
+  username  String
+  createdAt DateTime @default(now())
+
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id         String    @id @default(uuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id])
+  
+  customerId String
+  customer   User      @relation("CustomerConversations", fields: [customerId], references: [id])
+  
+  vendorId   String
+  vendor     User      @relation("VendorConversations", fields: [vendorId], references: [id])
+  
+  messages   Message[]
+  updatedAt  DateTime  @updatedAt
+  
+  @@unique([productId, customerId, vendorId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  content        String
+  createdAt      DateTime     @default(now())
+  
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+}
+
+enum Role {
+  USER
+  VENDOR
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
 }
 
 enum PaymentMethod {
@@ -112,19 +177,4 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
-}
-
-model Payment {
-  id        String        @id @default(uuid())
-  orderId   String        @unique
-
-  method    PaymentMethod
-  status    PaymentStatus @default(PENDING)
-
-  amount    Float
-
-  order     Order         @relation(fields: [orderId], references: [id])
-
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
 }
