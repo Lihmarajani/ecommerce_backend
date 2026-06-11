@@ -9,50 +9,45 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(USER)
-  
-  // FIXED: Changed 'string' to 'String'
-  shopName     String?  
-  shopAddress  String?  
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  // Relations...
-  cartItems            CartItem[]
-  orders               Order[]    
-  products             Product[]  
-  reviews              Review[]   
-  
+  id                    String         @id @default(uuid())
+  name                  String
+  email                 String         @unique
+  passwordHash          String
+  role                  Role           @default(USER)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  shopAddress           String?
+  shopDescription String?  @default("")
+  avatarUrl       String?  @default("")
+  shopName              String?
+  cartItems             CartItem[]
   customerConversations Conversation[] @relation("CustomerConversations")
   vendorConversations   Conversation[] @relation("VendorConversations")
   messages              Message[]
+  orders                Order[]
+  products              Product[]
+  reviews               Review[]
 }
 
 model Product {
-  id            String      @id @default(uuid())
-  sku           String      @unique
+  id            String         @id @default(uuid())
   name          String
   description   String
   price         Float
   stock         Int
   imageUrl      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   categoryId    String?
-  vendorId      String      
-  averageRating Float       @default(0)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
+  sku           String         @unique
+  averageRating Float          @default(0)
+  vendorId      String
   cartItems     CartItem[]
-  orderItems    OrderItem[]
-  category      Category?   @relation(fields: [categoryId], references: [id])
-  vendor        User        @relation(fields: [vendorId], references: [id])
-  reviews       Review[]
   conversations Conversation[]
+  orderItems    OrderItem[]
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  vendor        User           @relation(fields: [vendorId], references: [id])
+  reviews       Review[]
 }
 
 model CartItem {
@@ -61,7 +56,6 @@ model CartItem {
   userId    String
   productId String
   createdAt DateTime @default(now())
-  
   product   Product  @relation(fields: [productId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
 
@@ -74,7 +68,6 @@ model Order {
   status    OrderStatus @default(PENDING)
   total     Float
   createdAt DateTime    @default(now())
-  
   user      User        @relation(fields: [userId], references: [id])
   items     OrderItem[]
   payment   Payment?
@@ -86,7 +79,6 @@ model OrderItem {
   productId String
   quantity  Int
   price     Float
-  
   order     Order   @relation(fields: [orderId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 }
@@ -96,7 +88,6 @@ model Category {
   name      String    @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  
   products  Product[]
 }
 
@@ -108,7 +99,6 @@ model Payment {
   amount    Float
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
-  
   order     Order         @relation(fields: [orderId], references: [id])
 }
 
@@ -118,28 +108,23 @@ model Review {
   comment   String
   username  String
   createdAt DateTime @default(now())
-
   productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-
   userId    String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Conversation {
   id         String    @id @default(uuid())
   productId  String
-  product    Product   @relation(fields: [productId], references: [id])
-  
   customerId String
-  customer   User      @relation("CustomerConversations", fields: [customerId], references: [id])
-  
   vendorId   String
-  vendor     User      @relation("VendorConversations", fields: [vendorId], references: [id])
-  
-  messages   Message[]
   updatedAt  DateTime  @updatedAt
-  
+  customer   User      @relation("CustomerConversations", fields: [customerId], references: [id])
+  product    Product   @relation(fields: [productId], references: [id])
+  vendor     User      @relation("VendorConversations", fields: [vendorId], references: [id])
+  messages   Message[]
+
   @@unique([productId, customerId, vendorId])
 }
 
@@ -147,11 +132,9 @@ model Message {
   id             String       @id @default(uuid())
   content        String
   createdAt      DateTime     @default(now())
-  
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
   senderId       String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation(fields: [senderId], references: [id])
 }
 

@@ -26,7 +26,6 @@ import { Roles } from '../auth/decorators/roles.decorator';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  // PUBLIC - Get all products (with search + filters)
   @Get()
   findAll(
     @Query('page') page = '1',
@@ -46,13 +45,11 @@ export class ProductsController {
     });
   }
 
-  // PUBLIC - Get single product
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
-  // VENDOR ONLY - Create product
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @Post()
@@ -64,26 +61,42 @@ export class ProductsController {
   ) {
     const vendorId = req.user.id; 
 
-    // 1. Send the file to Cloudinary and get the public URL back!
-    let uploadedImageUrl = '';
-    if (file) {
-      uploadedImageUrl = await this.productsService.uploadImage(file);
+    // Robust multi-tier extraction to capture imageUrl across varied payload formats
+    let finalImageUrl = '';
+    
+    if (body.imageUrl) {
+      finalImageUrl = body.imageUrl;
+    } else if (body.data && typeof body.data === 'string') {
+      try {
+        const parsedData = JSON.parse(body.data);
+        if (parsedData.imageUrl) {
+          finalImageUrl = parsedData.imageUrl;
+        }
+      } catch (e) {
+        // Fallback if parsing fails
+      }
+    } else if (body.data && body.data.imageUrl) {
+      finalImageUrl = body.data.imageUrl;
     }
 
-    // 2. Package the text data AND the new image URL together
-    const dto = {
-      name: body.name,
-      description: body.description,
-      price: parseFloat(body.price),
-      stock: parseInt(body.stock, 10),
-      imageUrl: uploadedImageUrl, 
-    } as CreateProductDto;
+    if (file) {
+      finalImageUrl = await this.productsService.uploadImage(file);
+    }
 
-    // 3. Save everything to the database
+    // FIXED: Added placeholder 'sku' attribute to fulfill CreateProductDto type definition requirements
+    const dto: CreateProductDto = {
+      sku: '',
+      name: body.name || (body.data ? body.data.name : ''),
+      description: body.description || (body.data ? body.data.description : ''),
+      price: body.price ? parseFloat(body.price) : (body.data ? parseFloat(body.data.price) : 0),
+      stock: body.stock ? parseInt(body.stock, 10) : (body.data ? parseInt(body.data.stock, 10) : 0),
+      imageUrl: finalImageUrl,
+      categoryId: body.categoryId || (body.data ? body.data.categoryId : undefined),
+    };
+
     return this.productsService.create(dto, vendorId);
   }
 
-  // VENDOR ONLY - Update product
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @Patch(':id')
@@ -91,7 +104,6 @@ export class ProductsController {
     return this.productsService.update(id, dto);
   }
 
-  // VENDOR ONLY - Delete product
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @Delete(':id')
@@ -99,10 +111,6 @@ export class ProductsController {
     return this.productsService.remove(id);
   }
 
-  // ==========================================
-  // ---> NEW: REVIEW ENDPOINT <---
-  // ==========================================
-  // REGISTERED USERS ONLY - Add a review
   @UseGuards(JwtAuthGuard) 
   @Post(':id/reviews')
   async addReview(
@@ -110,7 +118,6 @@ export class ProductsController {
     @Body() body: { rating: number; comment: string },
     @Request() req
   ) {
-    // req.user.id comes automatically from the logged-in JWT token
     return this.productsService.addReview(
       productId,
       req.user.id,

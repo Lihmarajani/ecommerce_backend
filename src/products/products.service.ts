@@ -1,17 +1,15 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Prisma } from '@prisma/client';
 
-// --- NEW IMPORTS FOR CLOUDINARY ---
 import { v2 as cloudinary } from 'cloudinary';
 import * as streamifier from 'streamifier';
 
 @Injectable()
 export class ProductsService {
   constructor(private prisma: PrismaService) {
-    // --- CLOUDINARY CONFIGURATION ---
     cloudinary.config({
       cloud_name: 'dpzyfkakh', 
       api_key: '182279576924456',       
@@ -19,7 +17,6 @@ export class ProductsService {
     });
   }
 
-  // --- NEW: CLOUDINARY UPLOAD METHOD ---
   async uploadImage(file: any): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -35,7 +32,6 @@ export class ProductsService {
 
   // CREATE PRODUCT
   async create(dto: CreateProductDto, vendorId: string) {
-    // Generate the unique SKU
     const generatedSku = `SKU-${Date.now()}-${Math.random()
       .toString(36)
       .substring(2, 8)
@@ -55,7 +51,7 @@ export class ProductsService {
     });
   }
 
-  // GET ALL PRODUCTS (pagination + search + filters + category)
+  // GET ALL PRODUCTS
   async findAll(filters: {
     page?: number;
     limit?: number;
@@ -72,17 +68,13 @@ export class ProductsService {
     const { search, minPrice, maxPrice, inStock, categoryId } = filters;
 
     const where: Prisma.ProductWhereInput = {
-      ...(categoryId && {
-        categoryId,
-      }),
-
+      ...(categoryId && { categoryId }),
       ...(search && {
         name: {
           contains: search,
           mode: Prisma.QueryMode.insensitive,
         },
       }),
-
       ...(minPrice || maxPrice
         ? {
             price: {
@@ -91,14 +83,7 @@ export class ProductsService {
             },
           }
         : {}),
-
-      ...(inStock === 'true'
-        ? {
-            stock: {
-              gt: 0,
-            },
-          }
-        : {}),
+      ...(inStock === 'true' ? { stock: { gt: 0 } } : {}),
     };
 
     const [items, totalItems] = await this.prisma.$transaction([
@@ -106,18 +91,13 @@ export class ProductsService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
         include: {
           category: true,
-          reviews: true, // Let's include reviews here so the list view sees ratings!
+          reviews: true, 
         },
       }),
-
-      this.prisma.product.count({
-        where,
-      }),
+      this.prisma.product.count({ where }),
     ]);
 
     return {
@@ -136,25 +116,40 @@ export class ProductsService {
       include: {
         category: true,
         reviews: true, 
-        // --- ADDED THIS TO FETCH SHOP NAME ---
         vendor: {
-          select: {
-            shopName: true,
-          },
+          select: { shopName: true },
         },
       },
     });
   }
 
-  // UPDATE PRODUCT
-  update(id: string, dto: UpdateProductDto) {
-    return this.prisma.product.update({
+  // CONCURRENCY-SAFE DATA UPDATE ROUTINE
+  async update(id: string, dto: UpdateProductDto & { clientUpdatedAt?: string }) {
+    // 1. Fetch current record master parameters directly from your PostgreSQL cluster instance
+    const existingProduct = await this.prisma.product.findUnique({ where: { id } });
+
+    if (!existingProduct) {
+      throw new BadRequestException("Target catalog product record was not found.");
+    }
+
+    // 2. Perform optimistic timestamp validations if provided by client payload records
+    if (dto.clientUpdatedAt) {
+      const clientTime = new Date(dto.clientUpdatedAt).getTime();
+      const serverTime = new Date(existingProduct.updatedAt).getTime();
+
+      // Drop update silently or warn client if newer changes exist on server
+      if (clientTime < serverTime) {
+        throw new ConflictException("Sync rejected: A newer modification state is saved in cloud database.");
+      }
+    }
+
+    return await this.prisma.product.update({
       where: { id },
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.description && { description: dto.description }),
-        ...(dto.price && { price: dto.price }),
-        ...(dto.stock && { stock: dto.stock }),
+        ...(dto.price && { price: Number(dto.price) }),
+        ...(dto.stock && { stock: Number(dto.stock) }),
         ...(dto.imageUrl && { imageUrl: dto.imageUrl }),
         ...(dto.categoryId && { categoryId: dto.categoryId }),
       },
@@ -180,14 +175,10 @@ export class ProductsService {
     }
   }
 
-  // ==========================================
-  // ---> NEW: ADD REVIEW METHOD <---
-  // ==========================================
+  // ADD REVIEW METHOD
   async addReview(productId: string, userId: string, rating: number, comment: string) {
-    // 1. Fetch the user to get their name
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    // 2. Save the new review
     await this.prisma.review.create({
       data: {
         rating,
@@ -198,13 +189,9 @@ export class ProductsService {
       },
     });
 
-    // 3. Fetch all reviews for this product to do the math
     const allReviews = await this.prisma.review.findMany({ where: { productId } });
-    
-    // 4. Calculate the new average rating
     const avgRating = allReviews.reduce((sum, rev) => sum + rev.rating, 0) / allReviews.length;
 
-    // 5. Update the product with the new rating!
     return this.prisma.product.update({
       where: { id: productId },
       data: { averageRating: avgRating },

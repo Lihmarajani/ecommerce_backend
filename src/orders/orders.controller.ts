@@ -51,6 +51,15 @@ export class OrdersController {
     return this.ordersService.myOrders(req.user.id);
   }
 
+  // VENDOR ONLY - Get orders for products specifically belonging to the logged-in vendor
+  @UseGuards(RolesGuard)
+  @Roles('VENDOR')
+  @Get('vendor/all')
+  async findVendorOrders(@Req() req) {
+    // Passes down req.user.id from the verified JWT payload to filter database items
+    return this.ordersService.findOrdersByVendor(req.user.id);
+  }
+
   // GET SINGLE ORDER
   @Get(':id')
   findOne(@Param('id') id: string) {

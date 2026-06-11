@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -6,12 +6,27 @@ export class VendorService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboardStats(vendorId: string) {
-    // 1. Total Active Products (using vendorId from your schema)
+    // Fetch the vendor profile attributes from the User table first
+    const vendorProfile = await this.prisma.user.findUnique({
+      where: { id: vendorId },
+      select: {
+        name: true,
+        email: true,
+        shopName: true,
+        shopAddress: true,
+        shopDescription: true,
+        avatarUrl: true,
+      },
+    });
+
+    if (!vendorProfile) {
+      throw new NotFoundException('Vendor profile record not found');
+    }
+
     const totalProducts = await this.prisma.product.count({
       where: { vendorId: vendorId }, 
     });
 
-    // 2. Low Stock Count
     const lowStockCount = await this.prisma.product.count({
       where: { 
         vendorId: vendorId,
@@ -19,8 +34,6 @@ export class VendorService {
       },
     });
 
-    // 3. Total Orders & Revenue
-    // Find all OrderItems linked to products owned by this specific vendor
     const vendorOrderItems = await this.prisma.orderItem.findMany({
       where: { 
         product: {
@@ -34,17 +47,17 @@ export class VendorService {
       },
     });
 
-    // Calculate total orders by counting unique order IDs
     const uniqueOrderIds = new Set(vendorOrderItems.map(item => item.orderId));
     const totalOrders = uniqueOrderIds.size;
     
-    // Calculate total revenue by summing (price * quantity) of the vendor's items
     const totalRevenue = vendorOrderItems.reduce(
       (sum, item) => sum + (item.price * item.quantity), 
       0
     );
 
+    // Combine profile structure and metrics inside a single response object
     return {
+      profile: vendorProfile,
       totalRevenue: totalRevenue.toFixed(2), 
       totalOrders,
       totalProducts,
@@ -52,11 +65,35 @@ export class VendorService {
     };
   }
 
-  // --- HELPER METHOD FOR FLUTTER INVENTORY SCREEN ---
   async getMyProducts(vendorId: string) {
     return this.prisma.product.findMany({
-      where: { vendorId: vendorId }, // Updated to match schema
+      where: { vendorId: vendorId }, 
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateProfileData(vendorId: string, updatePayload: {
+    shopName?: string;
+    shopAddress?: string;
+    shopDescription?: string;
+    avatarUrl?: string;
+  }) {
+    const targetVendor = await this.prisma.user.findUnique({
+      where: { id: vendorId }
+    });
+
+    if (!targetVendor) {
+      throw new NotFoundException('Vendor workspace record no longer exists');
+    }
+
+    return this.prisma.user.update({
+      where: { id: vendorId },
+      data: {
+        ...(updatePayload.shopName !== undefined && { shopName: updatePayload.shopName }),
+        ...(updatePayload.shopAddress !== undefined && { shopAddress: updatePayload.shopAddress }),
+        ...(updatePayload.shopDescription !== undefined && { shopDescription: updatePayload.shopDescription }),
+        ...(updatePayload.avatarUrl !== undefined && { avatarUrl: updatePayload.avatarUrl }),
+      }
     });
   }
 }

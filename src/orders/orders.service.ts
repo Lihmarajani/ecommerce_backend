@@ -147,8 +147,8 @@ export class OrdersService {
         };
       },
       {
-        maxWait: 5000, 
-        timeout: 20000, 
+        maxWait: 15000, 
+        timeout: 30000, 
       }
     );
   }
@@ -159,6 +159,43 @@ export class OrdersService {
       where: { userId },
       include: {
         items: {
+          include: {
+            product: true,
+          },
+        },
+        payment: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // VENDOR ONLY - Get multi-line items matching vendor identifier parameters
+  async findOrdersByVendor(vendorId: string) {
+    return this.prisma.order.findMany({
+      where: {
+        items: {
+          some: {
+            product: {
+              vendorId: vendorId,
+            },
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        items: {
+          where: {
+            product: {
+              vendorId: vendorId,
+            },
+          },
           include: {
             product: true,
           },
