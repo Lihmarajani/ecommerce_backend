@@ -20,24 +20,35 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // 1. Accept either 'sub' (translated token) or 'userId' (raw token)
-    const userId = payload.sub || payload.userId;
-    
-    if (!userId) {
+    const gatewayEmail = payload.email; 
+    const lookupId = payload.sub || payload.userId;
+
+    if (!lookupId) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    // 2. Fetch the user from the local Zentromart Prisma database
-    let user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    let user = null;
 
-    // 3. If the user doesn't exist locally (e.g. Prisma was reset), create them on the fly!
+    // 1. CROSS-SERVICE LINK: Prioritize finding the existing Zentromart user by email!
+    if (gatewayEmail) {
+      user = await this.prisma.user.findUnique({
+        where: { email: gatewayEmail },
+      });
+    }
+
+    // 2. FALLBACK: Look up by ID if email is not in payload or user not found
+    if (!user) {
+      user = await this.prisma.user.findUnique({
+        where: { id: lookupId },
+      });
+    }
+
+    // 3. AUTO-SYNC: Create only if they completely don't exist
     if (!user) {
       user = await this.prisma.user.create({
         data: {
-          id: userId,
-          email: payload.email || 'gateway@tawitawi.local',
+          id: lookupId, 
+          email: gatewayEmail || 'gateway@tawitawi.local',
           name: payload.name || 'Tawi-Tawi User',
           role: payload.role || 'USER',
           passwordHash: 'GATEWAY_SSO_USER',
