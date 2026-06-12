@@ -27,6 +27,7 @@ export class GatewayController {
         isLinked: true,
         requiresRegistration: false,
         externalUserId: user.id,
+        role: user.role,
       };
     }
 
@@ -37,11 +38,14 @@ export class GatewayController {
     };
   }
 
-@Post('register-user')
+  @Post('register-user')
   async registerUser(
     @Headers('x-internal-gateway-secret') secret: string,
-    @Body() body: { tawiTawiUserId: string; email: string; fullName: string }
+    @Body() body: any
   ) {
+    console.log('--- GATEWAY REGISTRATION ---');
+    console.log('Received body:', body);
+    console.log('----------------------------');
     if (secret !== process.env.INTEGRATION_API_KEY) {
       this.logger.warn('Unauthorized gateway registration attempt');
       throw new UnauthorizedException('Invalid internal gateway secret');
@@ -52,7 +56,7 @@ export class GatewayController {
       data: {
         email: body.email,
         name: body.fullName,
-        role: 'USER',
+        role: (body.role || 'USER') as any,
         passwordHash: 'GATEWAY_SSO_USER', // Add this line to satisfy Prisma
       },
     });
