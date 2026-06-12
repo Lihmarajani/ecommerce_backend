@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    let user = null;
+    let user: any = null;
 
     // 1. CROSS-SERVICE LINK: Prioritize finding the existing Zentromart user by email!
     if (gatewayEmail) {
