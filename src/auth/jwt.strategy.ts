@@ -20,17 +20,29 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    if (!payload.sub) {
+    // 1. Accept either 'sub' (translated token) or 'userId' (raw token)
+    const userId = payload.sub || payload.userId;
+    
+    if (!userId) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    // Always fetch the freshest role from the DB so gateway SSO users get their correct role
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    // 2. Fetch the user from the local Zentromart Prisma database
+    let user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
 
+    // 3. If the user doesn't exist locally (e.g. Prisma was reset), create them on the fly!
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      user = await this.prisma.user.create({
+        data: {
+          id: userId,
+          email: payload.email || 'gateway@tawitawi.local',
+          name: payload.name || 'Tawi-Tawi User',
+          role: payload.role || 'USER',
+          passwordHash: 'GATEWAY_SSO_USER',
+        },
+      });
     }
 
     return {
